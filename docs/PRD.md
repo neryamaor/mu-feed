@@ -1,7 +1,7 @@
 # PRD: Palestinian Spoken Arabic Learning App
 
 ## 1. Product Goal
-An interactive platform for learning Palestinian Spoken Arabic through short video content. The core experience is a vertical scrollable video feed with interactive subtitles, tap-to-translate functionality, and a personal vocabulary system.
+An interactive platform for learning Palestinian Spoken Arabic through short video content. The core experience is a full-screen, TikTok-style vertical video feed where videos auto-play as the user scrolls, with interactive subtitles, tap-to-translate functionality, and a personal vocabulary system.
 
 ---
 
@@ -15,7 +15,7 @@ Anyone who wants to learn Palestinian Spoken Arabic in a fun and engaging way, p
 ### 3.1 Core Components
 The system consists of three parts:
 
-**User App** — Video feed, interactive subtitles, tap-to-translate, personal dictionary, active learning, and user profile.
+**User App** — Full-screen auto-play video feed with interactive subtitle overlays, tap-to-translate, personal dictionary, active learning, and user profile. There is no separate video player screen — the feed itself is the player.
 
 **Admin Panel** — A separate interface accessible only to authorized admins, for managing videos, subtitles, translations, and permissions.
 
@@ -217,8 +217,21 @@ When saving a translation:
 
 ## 6. User App
 
-### 6.1 Video Feed
-A vertical scrollable feed of Arabic videos. The video pool is finite (not infinite). Feed ordering logic is deferred to a later phase — in the MVP, all videos are available to all users.
+### 6.1 Video Feed (Main Screen)
+The main screen of the app is a full-screen, TikTok-style vertical video feed. Each video occupies the entire screen. As the user scrolls vertically, the next video appears. This is the core experience — there is no separate video player screen.
+
+**Feed behavior:**
+- Videos auto-play as they become visible on screen — no tap required to start.
+- Videos loop automatically when they reach the end.
+- Sound is on by default.
+- Snap-to-video: the feed snaps to one video at a time (paging behavior). The user cannot stop between two videos. Implemented via `pagingEnabled`, `snapToInterval` (screen height), `decelerationRate="fast"`, and `disableIntervalMomentum` (prevents skipping multiple videos in one swipe).
+- One video is visible at a time (full-screen).
+- Interactive subtitles are rendered directly as an overlay on the playing video.
+- The user can fully hide subtitles. When hidden, subtitle data remains loaded in memory so subtitles can be restored instantly without re-fetching.
+- UI action overlays are displayed on top of the video (e.g., save to favorites, share — exact actions to be defined later).
+- A loading state is displayed while videos are being fetched or buffered (design to be defined separately).
+
+The video pool is finite (not infinite scroll). Feed ordering logic is deferred to a later phase — in the MVP, all published videos are available to all users.
 
 Example categories: Cars, Food, Jokes, Stand-up, Daily Life, Grooming, Shopping, Current Affairs, and more.
 
@@ -230,9 +243,11 @@ Users can search for videos by:
 - **Word or phrase** — searches across `arabic_text`, `hebrew_translation`, and `transliteration` fields; returns all videos containing a matching word or phrase in their subtitles
 
 ### 6.3 Interactive Subtitles
-- Subtitles are displayed as full sentences on screen.
+- Subtitles are displayed as an overlay directly on the auto-playing video in the feed — not in a separate screen.
+- The current subtitle segment is synced with the video's playback timestamp.
 - The user can toggle between Arabic script, Hebrew transliteration, or both.
-- Every word is tappable.
+- The user can fully hide subtitles. This is a visual-only hide — subtitle data stays loaded in memory so it can be restored instantly.
+- Every word is tappable (when subtitles are visible).
 
 ### 6.4 Tap-to-Translate (Inline Tooltip)
 When a user taps a word:
@@ -259,8 +274,8 @@ Learning statistics, current level, and progress history.
 ## 7. Development Phases
 
 ### Phase 1 — MVP
-- Basic video feed
-- Subtitles with toggle between Arabic and transliteration
+- Full-screen auto-play video feed (TikTok-style, one video at a time, snap-to-video, auto-loop, sound on)
+- Subtitles overlay on the video with toggle between Arabic and transliteration, and option to hide completely
 - Tap-to-translate with inline tooltip and video pause
 - Save to personal dictionary
 - Video search by category, tags, and word/phrase (PostgreSQL pg_trgm)
@@ -285,7 +300,7 @@ Learning statistics, current level, and progress history.
 |-------|-----------|--------|
 | Frontend | React Native + Expo | Single codebase for iOS, Android, and web |
 | Backend & Database | Supabase | Managed PostgreSQL, built-in auth, file storage, and auto-generated API |
-| Video Storage | Cloudflare Stream | Purpose-built for video streaming, handles encoding and delivery |
+| Video Storage | Mux | Purpose-built for video streaming, handles encoding and delivery, free tier for development |
 | Transcription | Whisper API | Arabic transcription with word-level timestamps |
 | Translation | Claude API or GPT-4 API | Best quality for Palestinian Spoken Arabic |
 | Search (MVP) | PostgreSQL pg_trgm | Built into Supabase, zero extra infrastructure |
@@ -299,7 +314,7 @@ Learning statistics, current level, and progress history.
 - **Whisper API** — Automatic transcription with segment-level timing and word mapping
 - **Claude API or GPT-4 API** — Translation of Palestinian Spoken Arabic to everyday Hebrew
 - **Supabase** — PostgreSQL database, authentication, file storage, and API
-- **Cloudflare Stream** — Video hosting and delivery
+- **Mux** — Video hosting and delivery (free tier for development)
 - **PostgreSQL pg_trgm** — MVP full-text search, built into Supabase
 - **Elasticsearch** (future) — Arabic root-aware full-text search
 - **Subtitle data format** — JSON with segment-level timing and word-to-dictionary mapping
