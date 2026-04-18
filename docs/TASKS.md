@@ -116,6 +116,112 @@ This is a multi-step wizard. Each step has both an automatic (API-powered) path 
 - [x] Admin sets: category (select from existing), tags (multi-select or create new), difficulty level (1–5)
 - [x] Publish button: update video `status` to `'published'` and set `published_at` timestamp
 
+### 1.9 Admin Panel — Post-Publish Video Editing
+
+- [x] Admin video list screen (`app/admin/videos/index.tsx`) — shows all videos (draft + published), title, status badge, difficulty, published date; "ערוך" button navigates to the edit screen; "+ העלאה" button links to the upload flow; accessible from a "ניהול סרטונים" link in the upload screen header
+- [x] Admin edit screen (`app/admin/videos/[id]/edit.tsx`) — single scrollable form (not a wizard); editable fields: title, difficulty (1–5), category (radio), tags (toggle chips + inline create), segments (arabic_text, start_time, end_time, per-word hebrew + transliteration)
+- [x] Save logic: title/difficulty → `videos`; category → delete+insert `video_categories`; tags → upsert `tags`, delete+insert `video_tags`; segment text/timing → `segments`; translations → `translations` rows via `context_translation_id` only (never `dictionary_entries`, never other videos' rows)
+- [x] Feed edit button — `FeedVideoItem` accepts `isAdmin?: boolean`; when true shows a small "✏ ערוך" overlay button (top-left) that navigates to the edit screen; `isAdmin` is passed from the feed screen via `useAuth`
+- [x] All data fetching and saving logic in `services/videoEdit.ts` (`fetchAllVideosForAdmin`, `fetchVideoForEdit`, `fetchCategoriesAndTags`, `saveVideoEdit`)
+- [x] New types added to `types/index.ts`: `AdminVideoListItem`, `EditableSegmentWord`, `EditableSegment`, `VideoEditData`, `VideoEditSavePayload`
+- [x] Words without a `context_translation_id` have their translation inputs disabled (no translation row to update)
+- [x] Cancel button navigates back without saving; success/error feedback shown inline after save
+
+**Decisions:**
+- Translation saves use UPDATE in-place on the `translations` row (not copy-on-write). If a translations row is shared across videos via an identical context_translation_id, editing one would affect the other. In practice this is unlikely since each upload creates new translation rows; copy-on-write deferred to Phase 2 if it becomes an issue.
+- Video file (Mux asset) is not replaceable from the edit screen — out of scope per task spec.
+
+### 1.10 AI Suggestions for Video Metadata
+
+- [x] New Edge Function `supabase/functions/suggest-metadata/index.ts` — accepts `{ transcript, categories[] }`, calls Claude (or OpenAI via `TRANSLATION_API_PROVIDER`), returns `{ title, tags, category }`; strips markdown fences, validates shape, returns `{ error }` on failure
+- [x] `suggestVideoMetadata(transcript, categoryNames)` added to `services/translation.ts` — calls `suggest-metadata` Edge Function, returns `MetadataSuggestion | null` (null on any error)
+- [x] `MetadataSuggestion` type added to `types/index.ts`
+- [x] After `translateAll()` completes in Step 3, fires `suggestVideoMetadata` as a background promise (non-blocking); result stored in `aiSuggestion` state when it resolves
+- [x] `useEffect` watches `[aiSuggestion, step]` and pre-fills Step 6 fields when they are still empty: title → `videoTitle`, tags → `tags`, category → `selectedCategoryId` (matched by name, case-insensitive)
+- [x] Step 6 gains a title `TextInput` (pre-fillable); publish handler includes `title` override when filled
+- [x] "✨ הוצע ע"י AI" label shown next to title / category / tags headings when the field was AI-filled; label clears when admin edits the field
+- [x] Graceful fallback: if suggestion call fails, Step 6 loads normally with empty fields
+- [x] `clearStepsAfter`: going back to Step 2 clears `aiSuggestion` (translation redone → suggestion stale); going back to Steps 3–5 keeps `aiSuggestion` but clears `videoTitle` and AI-suggested flags so Step 6 can re-prefill when re-entered
+
+**Decisions:**
+- Suggestion fires after `translateAll()` (end of Step 3), not after manual confirmation. This maximises the time available for the network call before the admin reaches Step 6.
+- Category matching is case-insensitive string comparison against category names — no fuzzy matching needed since Claude is given the exact list.
+- Title field in Step 6 is optional: if left empty, the title set in Step 1 (upload screen) is preserved.
+
+### 1.11 Credit / Source Field and Feed Display
+- [x] Migration `supabase/migrations/20260417000000_add_source_credit.sql` — `ALTER TABLE videos ADD COLUMN source_credit text;`
+- [x] `source_credit: string | null` added to `Video` interface; `sourceCredit` added to `VideoEditData` and `VideoEditSavePayload` in `types/index.ts`
+- [x] `services/videoEdit.ts` — `source_credit` included in `fetchVideoForEdit` select and `saveVideoEdit` UPDATE
+- [x] Wizard Step 6 (`app/admin/review/index.tsx`) — "קרדיט / מקור" optional TextInput; saved as `source_credit` (empty → null) on publish; cleared by `clearStep6Fields`
+- [x] Admin edit screen (`app/admin/videos/[id]/edit.tsx`) — same "קרדיט / מקור" field loaded from DB and saved via `saveVideoEdit`
+- [x] `FeedVideoItem` — ⓘ button (top-left, only when `source_credit` non-empty); tapping opens inline popup showing credit text; tapping outside the popup closes it; stacks below admin edit button when both visible
+
+**Decisions:**
+- Empty string credit field saves as `null` (not empty string) so the ⓘ button check `!!video.source_credit` works correctly.
+- Popup is positioned at bottom-left of the screen (above tab bar) to avoid covering subtitles.
+
+### 1.12 Copyright & DMCA Page
+- [x] Static screen at `app/(tabs)/profile/copyright.tsx` — no database queries
+- [x] Sections (in Hebrew): intro paragraph, Content & Copyright, Report Copyright Infringement (DMCA), Disclaimer
+- [x] DMCA contact button opens `mailto:neryamaor1@gmail.com` with pre-filled subject "Copyright Infringement Report — MuFeed"
+- [x] "זכויות יוצרים וחוק" row added to profile screen (`app/(tabs)/profile/index.tsx`) navigates to the copyright screen
+
+**Decisions:**
+- Screen is inside `app/(tabs)/profile/` (not a new tab) so Expo Router's file-based routing serves it as a stack push within the profile tab — no layout changes needed.
+- Text is right-aligned Hebrew throughout; the email address is displayed as-is below the button for copy reference.
+- Back button uses `router.back()` (not `router.replace`) so the user returns to the profile screen naturally.
+
+### 1.13 — Pause Feed Video When Leaving Tab
+- [x] `useIsFocused()` from `@react-navigation/native` imported in feed screen
+- [x] `isActive` prop for each `FeedVideoItem` gated on `isFocused`: `index === activeIndex && isFocused`
+- [x] When tab loses focus all videos receive `isActive=false` → existing play/pause effect pauses them; when tab regains focus the active video resumes — no changes to `useVideoPlayback` or `FeedVideoItem`
+
+**Decisions:**
+- Used `useIsFocused` (already available via React Navigation, which Expo Router wraps) rather than `useFocusEffect` because the value is needed as a prop condition, not a side-effect callback.
+- No changes to `FeedVideoItem` or `useVideoPlayback` — the pause is achieved purely by gating the `isActive` prop.
+
+### 1.14 — Restructure Tab Order and Navigation
+- [x] New tab order: Feed | מילון (Dictionary) | למידה (Learn) | חיפוש (Search) | פרופיל (Profile)
+- [x] `app/(tabs)/_layout.tsx` updated — Flashcards registered with `href: null` to hide from tab bar while keeping route accessible
+- [x] New `app/(tabs)/learn/index.tsx` — segmented control (row-reverse RTL) toggles between "מילון גלובלי" and "דקדוק"; both sections show placeholder empty state with "בקרוב" message
+- [x] `app/(tabs)/dictionary/index.tsx` — "כרטיסיות ›" button in header row navigates to `/flashcards`
+- [x] Tab labels updated to Hebrew: פיד, מילון, למידה, חיפוש, פרופיל
+
+**Decisions:**
+- Flashcards kept as a valid route (`href: null` hides the tab but preserves navigation) so the flashcards screen remains accessible from the dictionary screen without any extra routing setup.
+- Learn tab uses a local `useState` toggle rather than nested navigation — the two sections are simple placeholders and don't require their own route stack yet.
+
+### 1.15 — Favorites System
+- [x] Migration `supabase/migrations/20260418155744_add_video_favorites.sql` — `video_favorites` table with `(user_id, video_id)` UNIQUE constraint and `idx_video_favorites_user_id` index
+- [x] `VideoFavorite` type added to `types/index.ts`
+- [x] `services/favorites.ts` — `getFavoritedVideoIds()`, `toggleFavorite(videoId)`, `getUserFavorites()`; all use `supabase.auth.getUser()` internally
+- [x] `FeedActionOverlay` — new `isFavorited` + `onFavoriteToggle` props; heart button (♡/♥) added to action column
+- [x] `FeedVideoItem` — `isFavorited?` and `onFavoriteToggle?` props forwarded to `FeedActionOverlay`
+- [x] Feed screen — loads `getFavoritedVideoIds()` on mount; `handleFavoriteToggle` does optimistic update + `toggleFavorite` call with revert on error; `favoritedIds` and handler passed to each `FeedVideoItem`
+- [x] Profile screen — "הסרטונים המועדפים שלי" section reloads on tab focus via `useFocusEffect`; tapping a favorite shows alert "סרטון בודד — בקרוב" (single-video view deferred to Task 2.6)
+- [x] Profile screen switched from `View` to `ScrollView` to accommodate the favorites list
+
+**Decisions:**
+- Optimistic update on heart tap: local state updates immediately, DB call fires async, reverts on error. No loading state needed on the button.
+- `getUserFavorites()` joins `videos` table to get title for display — avoids a second fetch in the profile screen.
+- Single-video navigation deferred to Task 2.6 per spec — tapping a favorite shows an alert placeholder.
+
+**Post-ship fix:** Migration `20260418155744_add_video_favorites.sql` was updated before push to: (1) replace `uuid_generate_v4()` with `gen_random_uuid()` (remote DB lacks the `uuid-ossp` extension), (2) change `REFERENCES users(id)` to `REFERENCES auth.users(id)`, (3) enable RLS and add SELECT / INSERT / DELETE policies (`user_id = auth.uid()`). Without these policies all reads and writes were silently rejected by Supabase's default RLS-enabled-but-no-policies state.
+
+### 1.16 — Contextual Feed (Shared Feed for Favorites & Search)
+- [x] `components/ContextualFeed.tsx` — reusable full-screen feed component; accepts `videos: FeedVideo[]`, `initialIndex: number`, `onClose?: () => void`; contains all hook logic (`useVideoFeed`, `useVideoPlayback`, `useAuth`, `useIsFocused`, `useSafeAreaInsets`, favorites state); close button (absolute, top-left circle) rendered only when `onClose` provided
+- [x] `app/video/[source]/[id].tsx` — contextual feed route; parses `videos` JSON param from navigation, finds `initialIndex` by `id`, renders `<ContextualFeed>`; calls `router.back()` on bad/missing params
+- [x] `hooks/useVideoFeed.ts` — added optional `initialIndex = 0` param so `ContextualFeed` can start scrolled to the tapped video; non-breaking change
+- [x] `app/(tabs)/feed/index.tsx` — refactored to thin wrapper (~40 lines); all hook calls moved to `ContextualFeed`; returns `<ContextualFeed videos={videos} initialIndex={0} />`
+- [x] `app/(tabs)/profile/index.tsx` — tap handler maps `VideoFavorite[]` → `FeedVideo[]` with safe defaults, navigates to `/video/favorites/${fav.videoId}` with `videos` JSON param
+- [x] `app/(tabs)/search/index.tsx` — `VideoCard` `onPress` navigates to `/video/search/${item.id}` with `videos: JSON.stringify(results)`
+
+**Decisions:**
+- Video list is passed as `JSON.stringify(FeedVideo[])` navigation param — no re-fetch in the contextual feed route. Source screens (profile, search) already have the list loaded.
+- Profile maps `VideoFavorite[]` → `FeedVideo[]` at navigation time with null/[] defaults for missing fields (`source_credit: null`, `video_categories: []`, etc.) — `FeedVideoItem` only needs `id`, `url`, and `source_credit`.
+- Route fails fast: if `videos` param is absent or malformed, calls `router.back()` immediately rather than re-fetching or showing an error screen.
+- `source` segment in the route (`favorites` / `search`) is available for future analytics but not used in the current implementation.
+
 ---
 
 ## Phase 2 — Advanced Features
@@ -143,6 +249,7 @@ This is a multi-step wizard. Each step has both an automatic (API-powered) path 
 - [ ] Admin UI: create and edit grammar rules
 
 ### 2.4 User Profile
+Note: profile screen base already exists from task 1.12 (copyright navigation added). This task completes it with stats and level editing.
 - [ ] Build profile screen
 - [ ] Display: current level, total words saved, flashcard stats
 - [ ] Allow user to update their level
@@ -151,6 +258,7 @@ This is a multi-step wizard. Each step has both an automatic (API-powered) path 
 - [ ] Build global dictionary management screen for admins
 - [ ] Allow admin to view, edit, and delete dictionary entries
 - [ ] Allow admin to add or remove translations for existing entries
+- [ ] Allow admin to manually add new dictionary entries (arabic_text + translation + transliteration) without going through the video upload flow
 
 ---
 

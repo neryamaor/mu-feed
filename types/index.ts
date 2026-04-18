@@ -30,6 +30,7 @@ export interface Video {
   difficulty_level: number | null;
   published_at: string | null;
   created_at: string;
+  source_credit: string | null;
 }
 
 export interface Category {
@@ -166,6 +167,17 @@ export interface PersonalDictionaryWithEntry {
   dictionary_entries: DictionaryEntryWithTranslations | null;
 }
 
+export interface VideoFavorite {
+  id: string;
+  userId: string;
+  videoId: string;
+  savedAt: string;
+  /** Joined from videos table — title for display in the profile list. */
+  videoTitle: string;
+  /** Joined from videos table — Mux playback ID for thumbnail generation. */
+  videoUrl: string;
+}
+
 export interface FlashcardSession {
   id: string;
   user_id: string;
@@ -253,4 +265,88 @@ export interface DictionaryConflict {
   segmentIndex: number;
   wordPosition: number;
   resolution: 'replace' | 'add' | null;
+}
+
+// ─── AI metadata suggestion (Task 1.10) ──────────────────────────────────────
+
+/**
+ * Result of the `suggest-metadata` Edge Function call.
+ * Title and tags are Hebrew strings; category matches one of the
+ * existing category names from the `categories` table.
+ */
+export interface MetadataSuggestion {
+  title: string;
+  tags: string[];
+  /** One of the category names passed in the request (case-insensitive match). */
+  category: string;
+}
+
+// ─── Admin edit types (Task 1.9) ──────────────────────────────────────────────
+
+/** Row shown in the admin video management list. */
+export interface AdminVideoListItem {
+  id: string;
+  title: string;
+  status: 'draft' | 'published';
+  difficultyLevel: number | null;
+  publishedAt: string | null;
+  createdAt: string;
+}
+
+/** One word in the edit screen — combines segment_words + its context translation. */
+export interface EditableSegmentWord {
+  segmentWordId: string;
+  wordPosition: number;
+  /** dictionary_entries.arabic_text — display only, never written. */
+  arabic: string;
+  /** null = word has no context translation; translation inputs are disabled. */
+  contextTranslationId: string | null;
+  hebrew: string;
+  transliteration: string;
+}
+
+/** One segment as loaded for editing. */
+export interface EditableSegment {
+  id: string;
+  orderIndex: number;
+  startTime: number;
+  endTime: number;
+  arabicText: string;
+  words: EditableSegmentWord[];
+}
+
+/** Full data shape fetched for the edit screen. */
+export interface VideoEditData {
+  id: string;
+  title: string;
+  status: 'draft' | 'published';
+  difficultyLevel: number | null;
+  categoryId: string | null;
+  tagIds: string[];
+  segments: EditableSegment[];
+  sourceCredit: string | null;
+}
+
+/** Payload passed to saveVideoEdit(). */
+export interface VideoEditSavePayload {
+  title: string;
+  difficultyLevel: number | null;
+  categoryId: string | null;
+  sourceCredit: string | null;
+  /** IDs of existing tags to keep associated. */
+  existingTagIds: string[];
+  /** Names of brand-new tags to create and associate. */
+  newTagNames: string[];
+  segments: Array<{
+    id: string;
+    arabicText: string;
+    startTime: number;
+    endTime: number;
+    words: Array<{
+      segmentWordId: string;
+      contextTranslationId: string | null;
+      hebrew: string;
+      transliteration: string;
+    }>;
+  }>;
 }

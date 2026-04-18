@@ -27,7 +27,8 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { supabase } from '../../../services/supabase';
 import { transcribeVideo } from '../../../services/whisper';
-import { translateSegment } from '../../../services/translation';
+import { translateSegment, suggestVideoMetadata } from '../../../services/translation';
+import type { MetadataSuggestion } from '../../../types';
 import {
   insertSegment,
   lookupDictionaryEntry,
@@ -170,6 +171,13 @@ export default function AdminReviewScreen() {
 
   // Step 6
   const [publishing, setPublishing] = useState(false);
+  const [sourceCredit, setSourceCredit] = useState('');
+  // AI-suggested metadata (fetched after translateAll completes)
+  const [aiSuggestion, setAiSuggestion] = useState<MetadataSuggestion | null>(null);
+  const [videoTitle, setVideoTitle] = useState('');
+  const [titleAiSuggested, setTitleAiSuggested] = useState(false);
+  const [tagsAiSuggested, setTagsAiSuggested] = useState(false);
+  const [categoryAiSuggested, setCategoryAiSuggested] = useState(false);
 
   // ─── Load categories (for Step 6) ──────────────────────────────────────────
   useEffect(() => {
@@ -186,6 +194,33 @@ export default function AdminReviewScreen() {
       runDictionarySync();
     }
   }, [step]);
+
+  // ─── Apply AI suggestion when it arrives OR when Step 6 is entered ───────────
+  // Only pre-fills fields that are still empty so manual input is never lost.
+  useEffect(() => {
+    if (!aiSuggestion) return;
+
+    if (!videoTitle) {
+      setVideoTitle(aiSuggestion.title);
+      setTitleAiSuggested(true);
+    }
+
+    if (tags.length === 0 && aiSuggestion.tags.length > 0) {
+      setTags(aiSuggestion.tags);
+      setTagsAiSuggested(true);
+    }
+
+    if (!selectedCategoryId && aiSuggestion.category) {
+      const match = categories.find(
+        (c) => c.name.toLowerCase() === aiSuggestion.category.toLowerCase(),
+      );
+      if (match) {
+        setSelectedCategoryId(match.id);
+        setCategoryAiSuggested(true);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [aiSuggestion, step]);
 
   // ─── Step 2 handlers ────────────────────────────────────────────────────────
 
@@ -291,6 +326,16 @@ export default function AdminReviewScreen() {
       });
     }
     setTranslateProgress('');
+
+    // Fire-and-forget: request AI metadata suggestion in the background.
+    // The admin still navigates through Steps 4 and 5 before reaching Step 6,
+    // giving this call time to resolve. Falls back silently if it fails.
+    if (segments.length > 0 && categories.length > 0) {
+      const transcript = segments.map((s) => s.arabicText).join(' ');
+      suggestVideoMetadata(transcript, categories.map((c) => c.name)).then((suggestion) => {
+        if (suggestion) setAiSuggestion(suggestion);
+      });
+    }
   }
 
   function updateWord(
@@ -563,9 +608,21 @@ export default function AdminReviewScreen() {
 
   // ─── Back / Cancel ───────────────────────────────────────────────────────────
 
+  function clearStep6Fields() {
+    setSelectedCategoryId(null);
+    setTags([]);
+    setTagInput('');
+    setDifficulty(null);
+    setVideoTitle('');
+    setSourceCredit('');
+    setTitleAiSuggested(false);
+    setTagsAiSuggested(false);
+    setCategoryAiSuggested(false);
+  }
+
   function clearStepsAfter(targetStep: WizardStep) {
     if (targetStep <= 2) {
-      // Clear steps 3+: translations, phrases, sync, publish
+      // Clear steps 3+: translations, phrases, sync, publish, AI suggestion
       setSegments((prev) =>
         prev.map((seg) => ({
           ...seg,
@@ -584,12 +641,11 @@ export default function AdminReviewScreen() {
       setPendingSegmentWords([]);
       setSyncDone(false);
       setSyncLoading(false);
-      setSelectedCategoryId(null);
-      setTags([]);
-      setTagInput('');
-      setDifficulty(null);
+      // Translation is being redone — suggestion is stale
+      setAiSuggestion(null);
+      clearStep6Fields();
     } else if (targetStep === 3) {
-      // Clear steps 4+: phrases, sync, publish
+      // Clear steps 4+: phrases, sync, publish (keep aiSuggestion — translation unchanged)
       setSegments((prev) =>
         prev.map((seg) => ({
           ...seg,
@@ -605,30 +661,21 @@ export default function AdminReviewScreen() {
       setPendingSegmentWords([]);
       setSyncDone(false);
       setSyncLoading(false);
-      setSelectedCategoryId(null);
-      setTags([]);
-      setTagInput('');
-      setDifficulty(null);
+      clearStep6Fields();
     } else if (targetStep === 4) {
-      // Clear steps 5+: sync, publish
+      // Clear steps 5+: sync, publish (keep aiSuggestion)
       setConflicts([]);
       setPendingSegmentWords([]);
       setSyncDone(false);
       setSyncLoading(false);
-      setSelectedCategoryId(null);
-      setTags([]);
-      setTagInput('');
-      setDifficulty(null);
+      clearStep6Fields();
     } else if (targetStep === 5) {
-      // Clear step 6: publish; also reset sync so it re-runs on step 5 mount
+      // Clear step 6: publish; reset sync so it re-runs (keep aiSuggestion)
       setConflicts([]);
       setPendingSegmentWords([]);
       setSyncDone(false);
       setSyncLoading(false);
-      setSelectedCategoryId(null);
-      setTags([]);
-      setTagInput('');
-      setDifficulty(null);
+      clearStep6Fields();
     }
   }
 
@@ -699,13 +746,15 @@ export default function AdminReviewScreen() {
         .insert({ video_id: videoId, category_id: selectedCategoryId })
         .throwOnError();
 
-      // Publish
+      // Publish — include title override if the admin filled it in Step 6
       await supabase
         .from('videos')
         .update({
           status: 'published',
           published_at: new Date().toISOString(),
           difficulty_level: difficulty,
+          source_credit: sourceCredit.trim() || null,
+          ...(videoTitle.trim() ? { title: videoTitle.trim() } : {}),
         })
         .eq('id', videoId)
         .throwOnError();
@@ -1037,8 +1086,28 @@ export default function AdminReviewScreen() {
       <View>
         <Text style={styles.stepTitle}>שלב 6 — פרסום</Text>
 
+        {/* Title */}
+        <View style={styles.labelRow}>
+          <Text style={styles.sectionLabel}>כותרת</Text>
+          {titleAiSuggested && <Text style={styles.aiLabel}>✨ הוצע ע"י AI</Text>}
+        </View>
+        <TextInput
+          style={styles.input}
+          value={videoTitle}
+          onChangeText={(v) => {
+            setVideoTitle(v);
+            setTitleAiSuggested(false);
+          }}
+          placeholder="כותרת הסרטון (אופציונלי)"
+          placeholderTextColor="#6b7280"
+          textAlign="right"
+        />
+
         {/* Category */}
-        <Text style={styles.sectionLabel}>קטגוריה</Text>
+        <View style={[styles.labelRow, { marginTop: 12 }]}>
+          <Text style={styles.sectionLabel}>קטגוריה</Text>
+          {categoryAiSuggested && <Text style={styles.aiLabel}>✨ הוצע ע"י AI</Text>}
+        </View>
         {categories.map((cat) => (
           <Pressable
             key={cat.id}
@@ -1046,7 +1115,10 @@ export default function AdminReviewScreen() {
               styles.radioRow,
               selectedCategoryId === cat.id && styles.radioRowSelected,
             ]}
-            onPress={() => setSelectedCategoryId(cat.id)}
+            onPress={() => {
+              setSelectedCategoryId(cat.id);
+              setCategoryAiSuggested(false);
+            }}
           >
             <Text style={styles.radioText}>{cat.name}</Text>
             {selectedCategoryId === cat.id && <Text style={styles.radioCheck}>✓</Text>}
@@ -1054,7 +1126,10 @@ export default function AdminReviewScreen() {
         ))}
 
         {/* Tags */}
-        <Text style={[styles.sectionLabel, { marginTop: 20 }]}>תגיות</Text>
+        <View style={[styles.labelRow, { marginTop: 20 }]}>
+          <Text style={styles.sectionLabel}>תגיות</Text>
+          {tagsAiSuggested && <Text style={styles.aiLabel}>✨ הוצע ע"י AI</Text>}
+        </View>
         <View style={styles.tagInputRow}>
           <TextInput
             style={[styles.input, { flex: 1 }]}
@@ -1074,7 +1149,7 @@ export default function AdminReviewScreen() {
           {tags.map((tag) => (
             <View key={tag} style={styles.tagChip}>
               <Text style={styles.tagChipText}>{tag}</Text>
-              <Pressable onPress={() => removeTag(tag)}>
+              <Pressable onPress={() => { removeTag(tag); setTagsAiSuggested(false); }}>
                 <Text style={styles.deleteText}> ✕</Text>
               </Pressable>
             </View>
@@ -1096,6 +1171,17 @@ export default function AdminReviewScreen() {
             </Pressable>
           ))}
         </View>
+
+        {/* Credit / Source */}
+        <Text style={[styles.sectionLabel, { marginTop: 20 }]}>קרדיט / מקור (אופציונלי)</Text>
+        <TextInput
+          style={styles.input}
+          value={sourceCredit}
+          onChangeText={setSourceCredit}
+          placeholder="למשל: @username, YouTube, TikTok, תוכן מקורי"
+          placeholderTextColor="#6b7280"
+          textAlign="right"
+        />
 
         <Pressable
           style={[styles.primaryButton, { marginTop: 32 }, publishing && styles.primaryButtonDisabled]}
@@ -1531,5 +1617,16 @@ const styles = StyleSheet.create({
   },
   navButtonCancelText: {
     color: '#f87171',
+  },
+  labelRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 8,
+  },
+  aiLabel: {
+    color: '#a78bfa',
+    fontSize: 11,
+    fontWeight: '600',
   },
 });

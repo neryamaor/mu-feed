@@ -102,7 +102,12 @@ export default function AdminUploadScreen() {
       contentContainerStyle={[styles.content, { paddingTop: insets.top + 16 }]}
       keyboardShouldPersistTaps="handled"
     >
-      <Text style={styles.heading}>העלאת סרטון חדש</Text>
+      <View style={styles.headingRow}>
+        <Text style={styles.heading}>העלאת סרטון חדש</Text>
+        <Pressable onPress={() => router.push('/admin/videos')}>
+          <Text style={styles.manageLink}>ניהול סרטונים ›</Text>
+        </Pressable>
+      </View>
       <Text style={styles.subheading}>שלב 1 מתוך 6</Text>
 
       {/* Title */}
@@ -164,12 +169,21 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 48,
   },
+  headingRow: {
+    flexDirection: 'row-reverse',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 4,
+  },
   heading: {
     color: '#fff',
     fontSize: 24,
     fontWeight: '700',
     textAlign: 'right',
-    marginBottom: 4,
+  },
+  manageLink: {
+    color: '#3b82f6',
+    fontSize: 14,
   },
   subheading: {
     color: '#6b7280',

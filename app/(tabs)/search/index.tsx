@@ -20,12 +20,14 @@ import {
   ListRenderItem,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import { searchVideos } from '../../../services/search';
 import VideoCard from '../../../components/VideoCard';
 import type { FeedVideo } from '../../../types';
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const [query, setQuery] = useState('');
   const [results, setResults] = useState<FeedVideo[]>([]);
   const [loading, setLoading] = useState(false);
@@ -53,12 +55,15 @@ export default function SearchScreen() {
     ({ item }) => (
       <VideoCard
         video={item}
-        onPress={() => {
-          // TODO (Task 1.7+): navigate to feed at this video once deep-linking is supported.
-        }}
+        onPress={() =>
+          router.push({
+            pathname: `/video/search/${item.id}`,
+            params: { videos: JSON.stringify(results) },
+          })
+        }
       />
     ),
-    [],
+    [results, router],
   );
 
   const isIdle = query.trim().length < 2;

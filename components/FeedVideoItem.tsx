@@ -36,8 +36,9 @@
 //   parent feed (via useVideoPlayback) so they persist across videos.
 
 import { useEffect, useState, useCallback } from 'react';
-import { View, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
+import { View, Text, StyleSheet, useWindowDimensions, Pressable } from 'react-native';
 import { VideoView, useVideoPlayer } from 'expo-video';
+import { useRouter } from 'expo-router';
 import { getMuxStreamUrl } from '../services/video';
 import { useSubtitles } from '../hooks/useSubtitles';
 import FeedActionOverlay from './FeedActionOverlay';
@@ -57,6 +58,10 @@ interface Props {
   /** Feed-level subtitle mode — persists across videos (lives in useVideoPlayback). */
   subtitleMode: SubtitleMode;
   onModeChange: (mode: SubtitleMode) => void;
+  /** When true, renders a small "Edit" button that navigates to the admin edit screen. */
+  isAdmin?: boolean;
+  isFavorited?: boolean;
+  onFavoriteToggle?: () => void;
 }
 
 export default function FeedVideoItem({
@@ -68,7 +73,11 @@ export default function FeedVideoItem({
   onSubtitlesToggle,
   subtitleMode,
   onModeChange,
+  isAdmin = false,
+  isFavorited = false,
+  onFavoriteToggle,
 }: Props) {
+  const router = useRouter();
   // useWindowDimensions is the single source of truth for screen height.
   // snapToInterval in the FlatList uses the same value → reliable Android snap.
   const { width, height } = useWindowDimensions();
@@ -82,6 +91,8 @@ export default function FeedVideoItem({
   const [tappedWord, setTappedWord] = useState<SegmentWordWithDetails | null>(null);
   // Screen coordinates of the tapped word — used to position the tooltip card.
   const [tappedWordPosition, setTappedWordPosition] = useState<WordButtonPosition | null>(null);
+  // Credit popup open state.
+  const [creditVisible, setCreditVisible] = useState(false);
 
   const { getActiveSegment } = useSubtitles(video.id);
 
@@ -207,13 +218,49 @@ export default function FeedVideoItem({
         />
       )}
 
-      {/* Layer 3 — Action buttons (mute, subtitle toggle, future: save/share) */}
+      {/* Layer 3 — Action buttons (mute, subtitle toggle, favorites) */}
       <FeedActionOverlay
         isMuted={isMuted}
         onMuteToggle={onMuteToggle}
         subtitlesVisible={subtitlesVisible}
         onSubtitlesToggle={onSubtitlesToggle}
+        isFavorited={isFavorited}
+        onFavoriteToggle={onFavoriteToggle ?? (() => {})}
       />
+
+      {/* Layer 3b — Top-left button column: admin edit + credit info */}
+      {(isAdmin || !!video.source_credit) && (
+        <View style={styles.topLeftColumn}>
+          {isAdmin && (
+            <Pressable
+              style={styles.adminEditButton}
+              onPress={() => router.push(`/admin/videos/${video.id}/edit`)}
+            >
+              <Text style={styles.adminEditText}>✏ ערוך</Text>
+            </Pressable>
+          )}
+          {!!video.source_credit && (
+            <Pressable
+              style={styles.creditButton}
+              onPress={() => setCreditVisible(true)}
+            >
+              <Text style={styles.creditButtonText}>ⓘ</Text>
+            </Pressable>
+          )}
+        </View>
+      )}
+
+      {/* Credit popup — tap-outside backdrop closes the popup */}
+      {creditVisible && (
+        <>
+          <Pressable style={StyleSheet.absoluteFill} onPress={() => setCreditVisible(false)} />
+          <View style={styles.creditPopupContainer} pointerEvents="box-none">
+            <Pressable style={styles.creditPopup} onPress={() => {}}>
+              <Text style={styles.creditPopupText}>{video.source_credit}</Text>
+            </Pressable>
+          </View>
+        </>
+      )}
 
       {/* Layer 4 — Word tooltip.
           Rendered above all other layers. The backdrop inside WordTooltip
@@ -234,5 +281,53 @@ export default function FeedVideoItem({
 const styles = StyleSheet.create({
   container: {
     backgroundColor: '#000',
+  },
+  topLeftColumn: {
+    position: 'absolute',
+    top: 60,
+    left: 16,
+    flexDirection: 'column',
+    gap: 8,
+  },
+  adminEditButton: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    borderRadius: 8,
+  },
+  adminEditText: {
+    color: '#fff',
+    fontSize: 13,
+    fontWeight: '600',
+  },
+  creditButton: {
+    backgroundColor: 'rgba(0,0,0,0.55)',
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  creditButtonText: {
+    color: '#fff',
+    fontSize: 18,
+  },
+  creditPopupContainer: {
+    position: 'absolute',
+    bottom: 120,
+    left: 16,
+    right: 16,
+  },
+  creditPopup: {
+    backgroundColor: 'rgba(20,20,20,0.92)',
+    borderRadius: 12,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+    alignSelf: 'flex-start',
+  },
+  creditPopupText: {
+    color: '#e5e7eb',
+    fontSize: 14,
+    textAlign: 'right',
   },
 });

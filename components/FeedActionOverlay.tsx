@@ -5,7 +5,7 @@
 // Current actions:
 //   - Mute toggle
 //   - Subtitles toggle (hide/show — visual only, useSubtitles keeps running)
-// Additional actions (save to favorites, share, etc.) are defined in a later phase.
+//   - Favorites toggle (save/unsave the current video)
 
 import { View, TouchableOpacity, Text, StyleSheet } from 'react-native';
 
@@ -14,6 +14,8 @@ interface Props {
   onMuteToggle: () => void;
   subtitlesVisible: boolean;
   onSubtitlesToggle: () => void;
+  isFavorited: boolean;
+  onFavoriteToggle: () => void;
 }
 
 export default function FeedActionOverlay({
@@ -21,6 +23,8 @@ export default function FeedActionOverlay({
   onMuteToggle,
   subtitlesVisible,
   onSubtitlesToggle,
+  isFavorited,
+  onFavoriteToggle,
 }: Props) {
   return (
     <View style={styles.overlay} pointerEvents="box-none">
@@ -31,6 +35,11 @@ export default function FeedActionOverlay({
           onPress={onSubtitlesToggle}
           label="CC"
           active={subtitlesVisible}
+        />
+        <ActionButton
+          onPress={onFavoriteToggle}
+          label={isFavorited ? '♥' : '♡'}
+          active={isFavorited}
         />
       </View>
     </View>

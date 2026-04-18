@@ -17,11 +17,13 @@ import {
   View,
   Text,
   FlatList,
+  Pressable,
   ActivityIndicator,
   StyleSheet,
   ListRenderItem,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { useRouter } from 'expo-router';
 import Swipeable from 'react-native-gesture-handler/Swipeable';
 import { RectButton } from 'react-native-gesture-handler';
 import { useDictionary } from '../../../hooks/useDictionary';
@@ -30,6 +32,7 @@ import type { PersonalDictionaryWithEntry } from '../../../types';
 
 export default function DictionaryScreen() {
   const insets = useSafeAreaInsets();
+  const router = useRouter();
   const { entries, loading, error, deleteEntry, refetch } = useDictionary(DUMMY_USER_ID);
 
   // Re-fetch every time the tab comes into focus so words saved from the feed
@@ -59,7 +62,12 @@ export default function DictionaryScreen() {
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
-      <Text style={styles.heading}>המילון שלי</Text>
+      <View style={styles.headerRow}>
+        <Text style={styles.heading}>המילון שלי</Text>
+        <Pressable style={styles.flashcardsButton} onPress={() => router.push('/flashcards')}>
+          <Text style={styles.flashcardsButtonText}>כרטיסיות ›</Text>
+        </Pressable>
+      </View>
 
       {entries.length === 0 ? (
         <View style={styles.emptyContainer}>
@@ -154,19 +162,37 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: '#000',
   },
-  centered: {
-    flex: 1,
-    backgroundColor: '#000',
-    justifyContent: 'center',
+  headerRow: {
+    flexDirection: 'row-reverse',
     alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 16,
   },
   heading: {
     color: '#ffffff',
     fontSize: 24,
     fontWeight: '700',
     textAlign: 'right',
-    paddingHorizontal: 20,
-    paddingVertical: 16,
+  },
+  flashcardsButton: {
+    backgroundColor: '#1a1a1a',
+    borderWidth: 1,
+    borderColor: '#374151',
+    borderRadius: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 7,
+  },
+  flashcardsButtonText: {
+    color: '#9ca3af',
+    fontSize: 14,
+    fontWeight: '600',
+  },
+  centered: {
+    flex: 1,
+    backgroundColor: '#000',
+    justifyContent: 'center',
+    alignItems: 'center',
   },
   list: {
     paddingBottom: 32,

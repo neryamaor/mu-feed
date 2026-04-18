@@ -9,8 +9,8 @@
 import { useState, useRef } from 'react';
 import type { ViewToken } from 'react-native';
 
-export function useVideoFeed() {
-  const [activeIndex, setActiveIndex] = useState(0);
+export function useVideoFeed(initialIndex = 0) {
+  const [activeIndex, setActiveIndex] = useState(initialIndex);
 
   // Keep a ref to the setter so the stable callback below always has access
   // to the latest dispatch without needing to be recreated.
