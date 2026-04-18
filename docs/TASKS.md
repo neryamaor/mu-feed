@@ -226,10 +226,18 @@ This is a multi-step wizard. Each step has both an automatic (API-powered) path 
 
 ## Phase 2 — Advanced Features
 
-### 2.0 UI Polish
-- [ ] Set correct tab order: feed in the center, profile in the bottom right
-- [ ] Review and finalize tab bar design and icons
-- [ ] Design and implement feed loading state (skeleton/spinner/animation while videos fetch or buffer) — design to be chosen by product owner
+### 2.0 Final Tab Structure and Navigation Restructure
+- [x] `app/(tabs)/_layout.tsx` — new RTL tab order: פרופיל | מילון | לימוד | חיפוש | פיד; Ionicons added to every tab; dark tab bar (`#111`); active color `#2563eb`
+- [x] `app/(tabs)/profile/index.tsx` — gear icon (⚙) in top-right navigates to settings; sign out + legal buttons removed (moved to settings)
+- [x] `app/(tabs)/profile/settings.tsx` (NEW) — "אודות MuFeed" paragraph, "זכויות יוצרים וחוק" row (navigates to copyright), "התנתקות" sign out button (red), version string "גרסה 1.0.0"
+- [x] `app/(tabs)/dictionary/index.tsx` — segmented control added; Section A (מילון אישי) = existing personal dict content with "כרטיסיות ›" button; Section B (מילון גלובלי) = placeholder "בקרוב"
+- [x] `app/(tabs)/learn/index.tsx` — sections renamed: דקדוק (was "מילון גלובלי", placeholder) + ביטויים (new, placeholder); global dictionary moved to מילון tab
+
+**Decisions:**
+- Icon library: `@expo/vector-icons` / `Ionicons` — bundled with Expo SDK, no additional install needed. Icons chosen: `person-outline`, `book-outline`, `school-outline`, `search-outline`, `play-circle-outline`.
+- Settings screen is a stack push within the profile tab (file at `app/(tabs)/profile/settings.tsx`) — Expo Router's file-based routing serves it as a modal/push without any extra layout configuration.
+- Sign out moved entirely to settings; profile screen now shows only user info, admin entry, and favorites. Keeps the profile screen focused.
+- Learn tab no longer has "מילון גלובלי" — that concept lives in the מילון tab (Section B). Learn is reserved for grammar and expressions.
 
 ### 2.1 Feed Filtering
 - [ ] Add filter UI to feed screen (by category, by difficulty level)

@@ -11,15 +11,15 @@ import {
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../hooks/useAuth';
 import { getUserFavorites } from '../../../services/favorites';
 import type { VideoFavorite, FeedVideo } from '../../../types';
 
 export default function ProfileScreen() {
-  const { user, isAdmin, signOut } = useAuth();
+  const { user, isAdmin } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [signingOut, setSigningOut] = useState(false);
   const [favorites, setFavorites] = useState<VideoFavorite[]>([]);
   const [favoritesLoading, setFavoritesLoading] = useState(true);
 
@@ -34,22 +34,22 @@ export default function ProfileScreen() {
     }, []),
   );
 
-  async function handleSignOut() {
-    setSigningOut(true);
-    try {
-      await signOut();
-      // Root layout (_layout.tsx) detects the cleared session and redirects to sign in.
-    } catch {
-      setSigningOut(false);
-    }
-  }
-
   return (
     <ScrollView
       style={styles.screen}
       contentContainerStyle={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
     >
-      <Text style={styles.email}>{user?.email}</Text>
+      {/* Header row: email + gear icon */}
+      <View style={styles.headerRow}>
+        <Text style={styles.email}>{user?.email}</Text>
+        <TouchableOpacity
+          style={styles.gearButton}
+          onPress={() => router.push('/profile/settings')}
+          hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+        >
+          <Ionicons name="settings-outline" size={22} color="#6b7280" />
+        </TouchableOpacity>
+      </View>
 
       {/* Admin entry point — only rendered for users with admin_permissions */}
       {isAdmin && (
@@ -106,25 +106,6 @@ export default function ProfileScreen() {
         )}
       </View>
 
-      {/* ── Legal / Settings ───────────────────────────────────────────────── */}
-      <TouchableOpacity
-        style={styles.legalButton}
-        onPress={() => router.push('/profile/copyright')}
-      >
-        <Text style={styles.legalButtonText}>זכויות יוצרים וחוק</Text>
-      </TouchableOpacity>
-
-      <TouchableOpacity
-        style={[styles.signOutButton, signingOut && styles.buttonDisabled]}
-        onPress={handleSignOut}
-        disabled={signingOut}
-      >
-        {signingOut ? (
-          <ActivityIndicator color="#1a1a1a" />
-        ) : (
-          <Text style={styles.signOutText}>Sign Out</Text>
-        )}
-      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -137,11 +118,20 @@ const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 24,
   },
+  headerRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 24,
+  },
   email: {
     fontSize: 16,
     color: '#6b7280',
-    marginBottom: 24,
+    flex: 1,
     textAlign: 'right',
+  },
+  gearButton: {
+    marginLeft: 12,
   },
   adminButton: {
     borderWidth: 1,
@@ -193,26 +183,4 @@ const styles = StyleSheet.create({
     marginLeft: 8,
   },
 
-  // ── Legal / Sign out ──
-  legalButton: {
-    borderWidth: 1,
-    borderColor: '#e5e7eb',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'flex-end',
-    marginBottom: 12,
-  },
-  legalButtonText: {
-    color: '#6b7280',
-    fontSize: 15,
-  },
-  signOutButton: {
-    borderWidth: 1,
-    borderColor: '#d1d5db',
-    borderRadius: 8,
-    padding: 14,
-    alignItems: 'center',
-  },
-  buttonDisabled: { opacity: 0.6 },
-  signOutText: { color: '#6b7280', fontWeight: '600', fontSize: 16 },
 });

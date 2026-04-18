@@ -1,29 +1,21 @@
 // Learn tab — two sub-sections accessed via a segmented control at the top:
-//   - מילון גלובלי (Global Dictionary) — placeholder until Task 2.5
-//   - דקדוק       (Grammar Rules)       — placeholder until Task 2.3
+//   - דקדוק   (Grammar Rules)  — placeholder until Task 2.3
+//   - ביטויים (Expressions)    — placeholder for future feature
 
 import { useState } from 'react';
 import { View, Text, Pressable, StyleSheet } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 
-type Section = 'dictionary' | 'grammar';
+type Section = 'grammar' | 'expressions';
 
 export default function LearnScreen() {
   const insets = useSafeAreaInsets();
-  const [section, setSection] = useState<Section>('dictionary');
+  const [section, setSection] = useState<Section>('grammar');
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top + 12 }]}>
       {/* Segmented control */}
       <View style={styles.segmentRow}>
-        <Pressable
-          style={[styles.segment, section === 'dictionary' && styles.segmentActive]}
-          onPress={() => setSection('dictionary')}
-        >
-          <Text style={[styles.segmentText, section === 'dictionary' && styles.segmentTextActive]}>
-            מילון גלובלי
-          </Text>
-        </Pressable>
         <Pressable
           style={[styles.segment, section === 'grammar' && styles.segmentActive]}
           onPress={() => setSection('grammar')}
@@ -32,21 +24,27 @@ export default function LearnScreen() {
             דקדוק
           </Text>
         </Pressable>
+        <Pressable
+          style={[styles.segment, section === 'expressions' && styles.segmentActive]}
+          onPress={() => setSection('expressions')}
+        >
+          <Text style={[styles.segmentText, section === 'expressions' && styles.segmentTextActive]}>
+            ביטויים
+          </Text>
+        </Pressable>
       </View>
 
       {/* Section content */}
-      {section === 'dictionary' ? (
+      {section === 'grammar' ? (
         <View style={styles.placeholder}>
-          <Text style={styles.placeholderTitle}>מילון גלובלי</Text>
           <Text style={styles.placeholderBody}>
-            בקרוב — מילון כולל כל המילים מהסרטונים
+            בקרוב — כללי תחביר ודקדוק
           </Text>
         </View>
       ) : (
         <View style={styles.placeholder}>
-          <Text style={styles.placeholderTitle}>דקדוק</Text>
           <Text style={styles.placeholderBody}>
-            בקרוב — כללי תחביר ודקדוק
+            בקרוב — ביטויים ושימושים נפוצים
           </Text>
         </View>
       )}
@@ -90,13 +88,6 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     paddingHorizontal: 32,
     paddingBottom: 80,
-  },
-  placeholderTitle: {
-    color: '#4b5563',
-    fontSize: 18,
-    fontWeight: '700',
-    marginBottom: 10,
-    textAlign: 'center',
   },
   placeholderBody: {
     color: '#374151',
