@@ -64,7 +64,7 @@ export default function TabsLayout() {
           ),
         }}
       />
-      <Tabs.Screen name="flashcards/index" options={{ href: null }} />
+      <Tabs.Screen name="flashcards" options={{ href: null }} />
     </Tabs>
   );
 }

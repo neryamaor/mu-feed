@@ -10,6 +10,7 @@ export default function ProfileLayout() {
       <Stack.Screen name="index" />
       <Stack.Screen name="settings" />
       <Stack.Screen name="copyright" />
+      <Stack.Screen name="favorites" />
     </Stack>
   );
 }

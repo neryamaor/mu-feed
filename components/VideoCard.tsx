@@ -28,23 +28,12 @@ export default function VideoCard({ video, onPress }: Props) {
               <Text style={styles.categoryText}>{categoryName}</Text>
             </View>
           )}
-          <DifficultyDots level={video.difficulty_level} />
         </View>
       </View>
     </TouchableOpacity>
   );
 }
 
-function DifficultyDots({ level }: { level: number | null }) {
-  if (!level) return null;
-  return (
-    <View style={styles.dotsRow}>
-      {[1, 2, 3, 4, 5].map((i) => (
-        <View key={i} style={[styles.dot, i <= level ? styles.dotFilled : styles.dotEmpty]} />
-      ))}
-    </View>
-  );
-}
 
 const styles = StyleSheet.create({
   card: {
@@ -90,19 +79,5 @@ const styles = StyleSheet.create({
     color: '#6b7280',
     fontWeight: '500',
   },
-  dotsRow: {
-    flexDirection: 'row',
-    gap: 4,
-  },
-  dot: {
-    width: 7,
-    height: 7,
-    borderRadius: 4,
-  },
-  dotFilled: {
-    backgroundColor: '#1a1a1a',
-  },
-  dotEmpty: {
-    backgroundColor: '#d1d5db',
-  },
+
 });

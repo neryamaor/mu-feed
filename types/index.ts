@@ -187,6 +187,20 @@ export interface FlashcardSession {
   last_shown_at: string | null;
 }
 
+/** Which side is shown first during a flashcard session. */
+export type FlashcardDirection = 'ar-to-he' | 'he-to-ar';
+
+/**
+ * A single flashcard, derived from a personal_dictionary entry.
+ * Uses the first translation row for the card (by DB insert order).
+ */
+export interface FlashcardCard {
+  entryId: string;
+  arabicText: string;
+  transliteration: string;
+  hebrewTranslation: string;
+}
+
 // ─── Admin workflow types (Task 1.8) ─────────────────────────────────────────
 
 /** One segment returned by Whisper (word-level timestamps discarded). */

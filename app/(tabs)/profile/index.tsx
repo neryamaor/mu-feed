@@ -4,9 +4,7 @@ import {
   Text,
   ScrollView,
   TouchableOpacity,
-  Pressable,
   StyleSheet,
-  ActivityIndicator,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useFocusEffect } from '@react-navigation/native';
@@ -14,30 +12,29 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { useAuth } from '../../../hooks/useAuth';
 import { getUserFavorites } from '../../../services/favorites';
-import type { VideoFavorite, FeedVideo } from '../../../types';
 
 export default function ProfileScreen() {
   const { user, isAdmin } = useAuth();
   const router = useRouter();
   const insets = useSafeAreaInsets();
-  const [favorites, setFavorites] = useState<VideoFavorite[]>([]);
-  const [favoritesLoading, setFavoritesLoading] = useState(true);
+  const [favCount, setFavCount] = useState<number | null>(null);
 
-  // Reload favorites whenever the tab comes into focus
+  // Reload count whenever the tab comes into focus (user may have unfavorited from feed).
   useFocusEffect(
     useCallback(() => {
-      setFavoritesLoading(true);
       getUserFavorites()
-        .then(setFavorites)
-        .catch(() => setFavorites([]))
-        .finally(() => setFavoritesLoading(false));
+        .then((favs) => setFavCount(favs.length))
+        .catch(() => setFavCount(0));
     }, []),
   );
 
   return (
     <ScrollView
       style={styles.screen}
-      contentContainerStyle={[styles.container, { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 }]}
+      contentContainerStyle={[
+        styles.container,
+        { paddingTop: insets.top + 16, paddingBottom: insets.bottom + 40 },
+      ]}
     >
       {/* Header row: email + gear icon */}
       <View style={styles.headerRow}>
@@ -61,51 +58,20 @@ export default function ProfileScreen() {
         </TouchableOpacity>
       )}
 
-      {/* ── Favorites section ──────────────────────────────────────────────── */}
-      <View style={styles.section}>
-        <Text style={styles.sectionTitle}>הסרטונים המועדפים שלי</Text>
-
-        {favoritesLoading ? (
-          <ActivityIndicator color="#6b7280" style={styles.favLoader} />
-        ) : favorites.length === 0 ? (
-          <Text style={styles.emptyFavorites}>
-            עדיין לא שמרת סרטונים. לחץ על ♡ בפיד כדי לשמור סרטון.
-          </Text>
-        ) : (
-          favorites.map((fav) => (
-            <Pressable
-              key={fav.id}
-              style={styles.favItem}
-              onPress={() => {
-                // Map VideoFavorite[] → FeedVideo[] so ContextualFeed receives
-                // the correct shape. Fields not available here default to null/[].
-                const feedVideos: FeedVideo[] = favorites.map((f) => ({
-                  id: f.videoId,
-                  title: f.videoTitle,
-                  url: f.videoUrl,
-                  status: 'published' as const,
-                  uploaded_by: null,
-                  difficulty_level: null,
-                  published_at: null,
-                  created_at: f.savedAt,
-                  source_credit: null,
-                  video_categories: [],
-                }));
-                router.push({
-                  pathname: `/video/favorites/${fav.videoId}`,
-                  params: { videos: JSON.stringify(feedVideos) },
-                });
-              }}
-            >
-              <Text style={styles.favTitle} numberOfLines={2}>
-                {fav.videoTitle}
-              </Text>
-              <Text style={styles.favChevron}>›</Text>
-            </Pressable>
-          ))
-        )}
-      </View>
-
+      {/* ── Favorites row ──────────────────────────────────────────────────── */}
+      <TouchableOpacity
+        style={styles.navRow}
+        onPress={() => router.push('/profile/favorites')}
+        activeOpacity={0.7}
+      >
+        <View style={styles.navRowLeft}>
+          <Text style={styles.navRowLabel}>הסרטונים המועדפים שלי</Text>
+          {favCount !== null && (
+            <Text style={styles.navRowCount}>({favCount} סרטונים)</Text>
+          )}
+        </View>
+        <Ionicons name="chevron-back" size={18} color="#d1d5db" />
+      </TouchableOpacity>
     </ScrollView>
   );
 }
@@ -141,46 +107,33 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginBottom: 12,
   },
-  adminButtonText: { color: '#1a1a1a', fontWeight: '600', fontSize: 16 },
-
-  // ── Favorites ──
-  section: {
-    marginBottom: 24,
+  adminButtonText: {
+    color: '#1a1a1a',
+    fontWeight: '600',
+    fontSize: 16,
   },
-  sectionTitle: {
-    fontSize: 17,
-    fontWeight: '700',
-    color: '#111',
-    textAlign: 'right',
-    marginBottom: 12,
-  },
-  favLoader: {
-    marginVertical: 16,
-  },
-  emptyFavorites: {
-    fontSize: 14,
-    color: '#9ca3af',
-    textAlign: 'right',
-    lineHeight: 20,
-  },
-  favItem: {
-    flexDirection: 'row-reverse',
+  navRow: {
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
-    paddingVertical: 12,
+    paddingVertical: 14,
     borderBottomWidth: 1,
     borderBottomColor: '#f3f4f6',
   },
-  favTitle: {
+  navRowLeft: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
     flex: 1,
-    fontSize: 15,
+    justifyContent: 'flex-end',
+  },
+  navRowLabel: {
+    fontSize: 16,
     color: '#111',
     textAlign: 'right',
   },
-  favChevron: {
-    fontSize: 18,
-    color: '#d1d5db',
-    marginLeft: 8,
+  navRowCount: {
+    fontSize: 14,
+    color: '#9ca3af',
   },
-
 });

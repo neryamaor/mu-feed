@@ -254,30 +254,52 @@ This is a multi-step wizard. Each step has both an automatic (API-powered) path 
 - Highlight is case-insensitive substring match in JS — consistent with pg_trgm ILIKE used in the DB queries.
 - Batch C/D/E/F are always run for Hebrew searches, even when the video set is small — simpler than conditional single-query fallback, and the queries are cheap indexed lookups.
 
-### 2.2 Feed Filtering
-- [ ] Add filter UI to feed screen (by category, by difficulty level)
-- [ ] Implement filtered queries to Supabase
+### 2.2 Dedicated Favorites Screen and VideoCard Cleanup
+- [x] `components/VideoCard.tsx` — removed `DifficultyDots` component and its styles (`dotsRow`, `dot`, `dotFilled`, `dotEmpty`); dots were leftover difficulty indicator, not pagination
+- [x] `app/(tabs)/profile/favorites.tsx` (NEW) — dedicated favorites screen; fetches own data on mount via `getUserFavorites()`; 2-column FlatList grid of `VideoCard`s; empty state "עדיין לא שמרת סרטונים"; tapping a card navigates to `/video/favorites/[id]` with `FeedVideo[]` JSON param; reloads on focus via `useFocusEffect`
+- [x] `app/(tabs)/profile/_layout.tsx` — `favorites` added to Stack.Screen list
+- [x] `app/(tabs)/profile/index.tsx` — inline favorites list replaced with single tappable nav row; label "הסרטונים המועדפים שלי" + count "({n} סרטונים)"; navigates to `/profile/favorites`; count reloads on focus
 
-### 2.2 Active Learning — Flashcards
-- [ ] Build `FlashCard` component
-- [ ] Build flashcards screen
-- [ ] Auto-generate flashcards from user's personal dictionary
-- [ ] Track `times_shown` and `times_correct` in `flashcard_sessions` table
-- [ ] Implement simple spaced repetition logic (show less-known words more often)
+**Decisions:**
+- Favorites screen is the source of truth — data fetched on mount, not passed via params. This keeps the screen self-contained and correct when navigated to from future entry points.
+- Profile screen stores only `favCount` (not the full list) — avoids loading thumbnail URLs that the profile screen no longer displays.
+- `VideoCard` is used as-is in the grid; each card is wrapped in `View style={{ flex: 1 }}` so FlatList `numColumns={2}` divides the row evenly. Card's built-in `marginHorizontal: 16` applies within each 50% cell.
+- `chevron-back` (pointing left/RTL) used as the row disclosure chevron — consistent with RTL layout direction.
 
-### 2.3 Grammar Section
+### 2.4 Active Learning — Flashcards
+- [x] `supabase/migrations/20260419000000_flashcard_sessions_rls.sql` — UNIQUE constraint on `(user_id, dictionary_entry_id)` + RLS SELECT/INSERT/UPDATE policies
+- [x] `FlashcardDirection` type + `FlashcardCard` interface added to `types/index.ts`
+- [x] `services/flashcards.ts` (NEW) — `getFlashcards()` fetches personal dictionary as `FlashcardCard[]`; `recordCardResult()` upserts cumulative stats (fire-and-forget)
+- [x] `app/(tabs)/flashcards/_layout.tsx` (NEW) — Stack wrapping `index` + `session`; route name changes from `"flashcards/index"` to `"flashcards"` per Expo Router 6 convention
+- [x] `app/(tabs)/_layout.tsx` — updated `name="flashcards/index"` → `name="flashcards"` to match new route name
+- [x] `app/(tabs)/flashcards/index.tsx` — setup screen: direction toggle (ar→he / he→ar), "כל המילים" option with count, "בחירה ידנית" placeholder, "התחל" button (disabled when empty or manual mode)
+- [x] `app/(tabs)/flashcards/session.tsx` (NEW) — full session: PanResponder swipe + `Animated.ValueXY` tilt; 3D flip via `Animated.spring` on rotateY; "ידעתי / לא ידעתי" overlay labels; round-complete + session-complete overlays; close confirmation alert
+
+**Decisions:**
+- **Animation library:** `PanResponder` + built-in `Animated` API (no `react-native-reanimated` — not in the project). This runs on the JS thread but is smooth enough for card-swipe UX.
+- **Tap vs swipe disambiguation:** In `onPanResponderRelease`, if `|dx| < 10 && |dy| < 10` it's treated as a tap (flip). Otherwise it's a swipe. No separate `TouchableOpacity` needed.
+- **Round logic is session-local only:** `leftSwipedRef` accumulates unknown cards in a ref (not state) so the closure in `commitSwipe` always sees the latest list without stale captures.
+- **Stats write is write-only:** `recordCardResult` is called without `await` on every swipe. Session flow never blocks on it. Errors are logged and swallowed.
+- **First translation only:** `getFlashcards()` uses `translations[0]` — entries with no translations are skipped entirely.
+- **Spaced repetition deferred:** `flashcard_sessions` is populated but not read. Round repetition is session-local (unknown cards replayed within the same session until all are known).
+
+**Post-ship tweaks:**
+- Permanent score pills added above card stack: red pill "לא ידעתי {n}" (left) + green pill "ידעתי {n}" (right); always visible; `knownCount` state tracks right-swipes and resets with `leftSwipedCount` at round/session restart.
+- Hebrew card faces no longer show transliteration below the word — transliteration is Arabic-only. Both the question face (he-to-ar direction) and the answer face (ar-to-he direction) now show only `hebrewTranslation`, centered.
+
+### 2.5 Grammar Section
 - [ ] Build grammar rules screen
 - [ ] Fetch and display `grammar_rules` from Supabase
 - [ ] Filter by category (verb forms, syntax, etc.)
 - [ ] Admin UI: create and edit grammar rules
 
-### 2.4 User Profile
+### 2.6 User Profile
 Note: profile screen base already exists from task 1.12 (copyright navigation added). This task completes it with stats and level editing.
 - [ ] Build profile screen
 - [ ] Display: current level, total words saved, flashcard stats
 - [ ] Allow user to update their level
 
-### 2.5 Admin Panel — Dictionary Management
+### 2.7 Admin Panel — Dictionary Management
 - [ ] Build global dictionary management screen for admins
 - [ ] Allow admin to view, edit, and delete dictionary entries
 - [ ] Allow admin to add or remove translations for existing entries

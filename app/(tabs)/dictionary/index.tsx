@@ -102,7 +102,8 @@ function PersonalDictionarySection({ insets: _insets }: PersonalSectionProps) {
       <View style={styles.headerRow}>
         <Text style={styles.heading}>המילון שלי</Text>
         <Pressable style={styles.flashcardsButton} onPress={() => router.push('/flashcards')}>
-          <Text style={styles.flashcardsButtonText}>כרטיסיות ›</Text>
+          <Text style={styles.flashcardsButtonText}>שנן את המילים בעזרת כרטיסיות</Text>
+          <Text style={styles.flashcardsButtonChevron}>›</Text>
         </Pressable>
       </View>
 
@@ -259,13 +260,21 @@ const styles = StyleSheet.create({
     backgroundColor: '#1a1a1a',
     borderWidth: 1,
     borderColor: '#374151',
-    borderRadius: 8,
-    paddingHorizontal: 14,
-    paddingVertical: 7,
+    borderRadius: 10,
+    paddingHorizontal: 16,
+    paddingVertical: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   flashcardsButtonText: {
-    color: '#9ca3af',
-    fontSize: 14,
+    color: '#e5e7eb',
+    fontSize: 15,
+    fontWeight: '700',
+  },
+  flashcardsButtonChevron: {
+    color: '#6b7280',
+    fontSize: 18,
     fontWeight: '600',
   },
   centered: {
