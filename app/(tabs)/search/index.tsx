@@ -2,9 +2,9 @@
 // or transliteration.
 //
 // All search logic lives in services/search.ts (ARCHITECTURE.md §5.1).
-// Results are displayed as VideoCard components (the component built for
-// non-feed contexts). Tapping a card is a no-op until the feed supports
-// deep-linking to a specific video (TODO Task 1.7+).
+// Results are split into two sections:
+//   1. Dictionary entries (up to 3) — shown above video results.
+//   2. Video results — VideoCard + optional context line below each card.
 //
 // Query is debounced 300ms to avoid firing on every keystroke.
 // Minimum 2 characters before a search is issued.
@@ -15,28 +15,29 @@ import {
   Text,
   TextInput,
   FlatList,
+  ScrollView,
   ActivityIndicator,
   StyleSheet,
-  ListRenderItem,
+  TouchableOpacity,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { searchVideos } from '../../../services/search';
 import VideoCard from '../../../components/VideoCard';
-import type { FeedVideo } from '../../../types';
+import type { SearchResults, DictionaryResult, VideoSearchResult } from '../../../types';
 
 export default function SearchScreen() {
   const insets = useSafeAreaInsets();
   const router = useRouter();
   const [query, setQuery] = useState('');
-  const [results, setResults] = useState<FeedVideo[]>([]);
+  const [results, setResults] = useState<SearchResults | null>(null);
   const [loading, setLoading] = useState(false);
 
   // Debounce: wait 300ms after the user stops typing before hitting the DB.
   useEffect(() => {
     const q = query.trim();
     if (q.length < 2) {
-      setResults([]);
+      setResults(null);
       setLoading(false);
       return;
     }
@@ -51,23 +52,14 @@ export default function SearchScreen() {
     return () => clearTimeout(timer);
   }, [query]);
 
-  const renderItem: ListRenderItem<FeedVideo> = useCallback(
-    ({ item }) => (
-      <VideoCard
-        video={item}
-        onPress={() =>
-          router.push({
-            pathname: `/video/search/${item.id}`,
-            params: { videos: JSON.stringify(results) },
-          })
-        }
-      />
-    ),
-    [results, router],
-  );
-
   const isIdle = query.trim().length < 2;
-  const isEmpty = !loading && !isIdle && results.length === 0;
+  const hasResults =
+    results !== null &&
+    (results.dictionaryResults.length > 0 || results.videoResults.length > 0);
+  const isEmpty = !loading && !isIdle && !hasResults;
+
+  // The list of FeedVideos passed to the contextual feed route.
+  const feedVideos = results?.videoResults.map((r) => r.video) ?? [];
 
   return (
     <View style={[styles.screen, { paddingTop: insets.top }]}>
@@ -80,7 +72,6 @@ export default function SearchScreen() {
         placeholder="חפש לפי שם, קטגוריה, מילה..."
         placeholderTextColor="#6b7280"
         textAlign="right"
-        // writingDirection ensures correct cursor placement on Android for RTL input.
         writingDirection="rtl"
         autoCorrect={false}
         autoCapitalize="none"
@@ -106,22 +97,118 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {!isIdle && !loading && results.length > 0 && (
-        <FlatList
-          data={results}
-          keyExtractor={(item) => item.id}
-          renderItem={renderItem}
-          contentContainerStyle={styles.list}
-          ItemSeparatorComponent={Separator}
+      {!isIdle && !loading && hasResults && (
+        <ScrollView
+          contentContainerStyle={styles.scrollContent}
           keyboardShouldPersistTaps="handled"
-        />
+        >
+          {/* ── Dictionary results section ─────────────────────────── */}
+          {results!.dictionaryResults.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionHeader}>תוצאות מהמילון</Text>
+              {results!.dictionaryResults.map((entry) => (
+                <DictionaryCard key={entry.entryId} entry={entry} />
+              ))}
+            </View>
+          )}
+
+          {/* ── Video results section ──────────────────────────────── */}
+          {results!.videoResults.length > 0 && (
+            <View style={styles.section}>
+              <Text style={styles.sectionHeader}>סרטונים המכילים את הביטוי</Text>
+              {results!.videoResults.map((result, index) => (
+                <View key={result.video.id}>
+                  {index > 0 && <View style={styles.separator} />}
+                  <VideoCard
+                    video={result.video}
+                    onPress={() =>
+                      router.push({
+                        pathname: `/video/search/${result.video.id}`,
+                        params: { videos: JSON.stringify(feedVideos) },
+                      })
+                    }
+                  />
+                  <ContextLine result={result} query={query.trim()} />
+                </View>
+              ))}
+            </View>
+          )}
+        </ScrollView>
       )}
     </View>
   );
 }
 
-function Separator() {
-  return <View style={styles.separator} />;
+// ─── Dictionary card ──────────────────────────────────────────────────────────
+
+function DictionaryCard({ entry }: { entry: DictionaryResult }) {
+  return (
+    <View style={styles.dictCard}>
+      <Text style={styles.dictArabic}>{entry.arabicText}</Text>
+      <Text style={styles.dictTranslit}>{entry.transliteration}</Text>
+      <Text style={styles.dictHebrew}>{entry.hebrewTranslation}</Text>
+    </View>
+  );
+}
+
+// ─── Context line below each video card ───────────────────────────────────────
+
+function ContextLine({ result, query }: { result: VideoSearchResult; query: string }) {
+  if (result.matchType === 'title' || !result.matchContext) return null;
+
+  if (result.matchType === 'tag') {
+    return (
+      <Text style={styles.contextLine} numberOfLines={1}>
+        תג: #{result.matchContext}
+      </Text>
+    );
+  }
+
+  // Segment match — highlight the query within the context text.
+  return (
+    <Text style={styles.contextLine} numberOfLines={2}>
+      <HighlightedText text={result.matchContext} highlight={query} />
+    </Text>
+  );
+}
+
+// ─── Inline highlight helper ──────────────────────────────────────────────────
+
+function HighlightedText({ text, highlight }: { text: string; highlight: string }) {
+  if (!highlight) return <Text>{text}</Text>;
+
+  const hl = highlight.toLowerCase();
+  const parts: Array<{ text: string; match: boolean }> = [];
+  let remaining = text;
+  let lowerRemaining = remaining.toLowerCase();
+
+  while (remaining.length > 0) {
+    const idx = lowerRemaining.indexOf(hl);
+    if (idx === -1) {
+      parts.push({ text: remaining, match: false });
+      break;
+    }
+    if (idx > 0) {
+      parts.push({ text: remaining.slice(0, idx), match: false });
+    }
+    parts.push({ text: remaining.slice(idx, idx + hl.length), match: true });
+    remaining = remaining.slice(idx + hl.length);
+    lowerRemaining = remaining.toLowerCase();
+  }
+
+  return (
+    <>
+      {parts.map((p, i) =>
+        p.match ? (
+          <Text key={i} style={styles.contextHighlight}>
+            {p.text}
+          </Text>
+        ) : (
+          <Text key={i}>{p.text}</Text>
+        ),
+      )}
+    </>
+  );
 }
 
 const styles = StyleSheet.create({
@@ -147,13 +234,66 @@ const styles = StyleSheet.create({
     marginBottom: 16,
     borderRadius: 10,
   },
-  list: {
+  scrollContent: {
     paddingBottom: 32,
+  },
+  section: {
+    marginBottom: 8,
+  },
+  sectionHeader: {
+    color: '#9ca3af',
+    fontSize: 12,
+    fontWeight: '600',
+    textAlign: 'right',
+    paddingHorizontal: 20,
+    paddingVertical: 8,
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
   },
   separator: {
     height: 1,
     backgroundColor: 'rgba(255,255,255,0.07)',
     marginHorizontal: 20,
+  },
+  // Dictionary card
+  dictCard: {
+    backgroundColor: '#1a1a1a',
+    borderRadius: 10,
+    marginHorizontal: 16,
+    marginBottom: 8,
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  dictArabic: {
+    color: '#ffffff',
+    fontSize: 18,
+    textAlign: 'right',
+    marginBottom: 4,
+  },
+  dictTranslit: {
+    color: '#9ca3af',
+    fontSize: 13,
+    textAlign: 'right',
+    marginBottom: 2,
+  },
+  dictHebrew: {
+    color: '#60a5fa',
+    fontSize: 14,
+    textAlign: 'right',
+  },
+  // Context line
+  contextLine: {
+    color: '#9ca3af',
+    fontSize: 13,
+    textAlign: 'right',
+    paddingHorizontal: 20,
+    paddingBottom: 10,
+    paddingTop: 2,
+    lineHeight: 18,
+  },
+  contextHighlight: {
+    color: '#ffffff',
+    fontWeight: '700',
   },
   centeredHint: {
     flex: 1,

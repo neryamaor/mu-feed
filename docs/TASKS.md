@@ -239,7 +239,22 @@ This is a multi-step wizard. Each step has both an automatic (API-powered) path 
 - Sign out moved entirely to settings; profile screen now shows only user info, admin entry, and favorites. Keeps the profile screen focused.
 - Learn tab no longer has "מילון גלובלי" — that concept lives in the מילון tab (Section B). Learn is reserved for grammar and expressions.
 
-### 2.1 Feed Filtering
+### 2.1 Enhanced Search — Dictionary Results and Context
+- [x] Language detection: Arabic (U+0600–U+06FF) vs Hebrew — drives all enrichment paths
+- [x] `DictionaryResult`, `VideoSearchResult`, `SearchResults` types added to `types/index.ts`
+- [x] `services/search.ts` fully rewritten — `searchVideos()` now returns `SearchResults`; all logic here, no search code elsewhere
+- [x] Dictionary results (up to 3): Arabic → ilike `arabic_text`; Hebrew → ilike `translations` (dedup by entry)
+- [x] Video enrichment — Batch A (tags), Batch B (segments), Arabic JS filter OR Hebrew batch pipeline (C/D/E/F); never one query per video
+- [x] Hebrew context reconstruction: `segment_words` → `context_translation_id` → `translations`; assembled in JS by grouping on `segment_id` and sorting by `word_position`
+- [x] Match priority: `segment` > `tag` > `title`; sorted by `matchCount DESC`, then `published_at DESC`
+- [x] Search screen UI updated: dictionary cards section above video results; section header "סרטונים המכילים את הביטוי"; context line below each VideoCard (segment with query highlight / `תג: #name` / nothing for title); navigation passes `videoResults.map(r => r.video)` to contextual feed
+
+**Decisions:**
+- Hebrew context uses `context_translation_id` (video-specific translation), not the global dictionary translation — matches what the subtitle overlay shows.
+- Highlight is case-insensitive substring match in JS — consistent with pg_trgm ILIKE used in the DB queries.
+- Batch C/D/E/F are always run for Hebrew searches, even when the video set is small — simpler than conditional single-query fallback, and the queries are cheap indexed lookups.
+
+### 2.2 Feed Filtering
 - [ ] Add filter UI to feed screen (by category, by difficulty level)
 - [ ] Implement filtered queries to Supabase
 

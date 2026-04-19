@@ -267,6 +267,47 @@ export interface DictionaryConflict {
   resolution: 'replace' | 'add' | null;
 }
 
+// ─── Search types (Task 2.1) ──────────────────────────────────────────────────
+
+/**
+ * A dictionary entry that matched the search query.
+ * Returns the entry's Arabic text and the single best-matching translation.
+ */
+export interface DictionaryResult {
+  entryId: string;
+  arabicText: string;
+  /** From the best matching translation row. */
+  transliteration: string;
+  hebrewTranslation: string;
+}
+
+/**
+ * A video that matched the search query, enriched with context about why it matched.
+ */
+export interface VideoSearchResult {
+  video: FeedVideo;
+  /** Primary match source for this video. */
+  matchType: 'segment' | 'tag' | 'title';
+  /**
+   * The text to show under the video card:
+   *   - 'segment': the Arabic segment text (Arabic search) or reconstructed Hebrew sentence
+   *   - 'tag':     the matching tag name
+   *   - 'title':   null (title is already visible in VideoCard)
+   */
+  matchContext: string | null;
+  /** How many times the query appears across all segments of this video. Used for ranking. */
+  matchCount: number;
+}
+
+/**
+ * Full result set returned by searchVideos().
+ */
+export interface SearchResults {
+  dictionaryResults: DictionaryResult[];
+  videoResults: VideoSearchResult[];
+  searchLanguage: 'arabic' | 'hebrew';
+}
+
 // ─── AI metadata suggestion (Task 1.10) ──────────────────────────────────────
 
 /**
